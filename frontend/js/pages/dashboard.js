@@ -148,4 +148,5 @@ class DashboardPage {
 // Initialize dashboard page
 document.addEventListener('DOMContentLoaded', () => {
     window.dashboardPage = new DashboardPage();
-});
+});                                                                                                                                                 
+
