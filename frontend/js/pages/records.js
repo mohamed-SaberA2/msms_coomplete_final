@@ -71,4 +71,5 @@ class RecordsPage {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.recordsPage = new RecordsPage();
-});
+});                                                                                                                                             
+
