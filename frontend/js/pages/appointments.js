@@ -70,4 +70,5 @@ class AppointmentsPage {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.appointmentsPage = new AppointmentsPage();
-});
+});                                                                                                                                                    
+
