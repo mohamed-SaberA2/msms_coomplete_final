@@ -71,4 +71,4 @@ class DoctorsPage {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.doctorsPage = new DoctorsPage();
-});
+});                                                                                                                                                 
