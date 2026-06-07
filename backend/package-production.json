@@ -1,0 +1,41 @@
+{
+  "name": "hospital-management-system",
+  "version": "2.0.0",
+  "description": "Professional Hospital Management System - Production Ready",
+  "type": "module",
+  "main": "server-production.js",
+  "scripts": {
+    "start": "node server-production.js",
+    "dev": "node --watch server-production.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "hospital",
+    "management",
+    "healthcare",
+    "api",
+    "express",
+    "mysql"
+  ],
+  "author": "Hospital Management System Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.1.2",
+    "bcryptjs": "^2.4.3",
+    "mysql2": "^3.6.5",
+    "dotenv": "^16.3.1",
+    "express-validator": "^7.0.0",
+    "express-rate-limit": "^7.1.5",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}
