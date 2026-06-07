@@ -23,4 +23,4 @@ class ModalComponent {
 }
 document.addEventListener('DOMContentLoaded', () => {
     window.modalComponent = new ModalComponent();
-});
+});                                                                                                                                               
