@@ -1,4 +1,4 @@
-/**
+**
  * Hospital Management System - Main Application File
  * Handles page routing, navigation, and overall app state
  * 
