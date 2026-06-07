@@ -1,17 +1,18 @@
 /**
  * Hospital Management System - Main Application File
  * Handles page routing, navigation, and overall app state
- *
+ * 
  * PRODUCTION-READY: Uses relative URL (/api) for universal compatibility
- * Works on localhost
- * Works on Replit
- * Works on any remote server
+ * ✅ Works on localhost
+ * ✅ Works on Replit
+ * ✅ Works on any remote server
  */
+
 class HospitalApp {
   constructor() {
     this.currentPage = 'login';
     this.currentUser = null;
-    this.apiUrl = '/api'; // ✅ FIXED: Changed from http://127.0.0.1:5000/api to /api
+    this.apiUrl = 'https://msmscoompletefinal--ms1464684.replit.app/api'; // ✅ FIXED: Points to Replit backend
     this.init();
   }
 
