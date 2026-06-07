@@ -22,4 +22,4 @@ class SidebarComponent {
 }
 document.addEventListener('DOMContentLoaded', () => {
     window.sidebarComponent = new SidebarComponent();
-});
+});                                                                                                                                         
