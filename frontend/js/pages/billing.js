@@ -71,4 +71,5 @@ class BillingPage {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.billingPage = new BillingPage();
-});
+});                                                                                                                                            
+
