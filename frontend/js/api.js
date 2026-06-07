@@ -1,158 +1,483 @@
 /**
- * API Communication Module (Production Ready)
- * Handles all HTTP requests to the backend
+ * API Client - Production-Ready
+ * 
+ * Uses relative URLs (/api) for universal compatibility:
+ * ✅ Works on localhost
+ * ✅ Works on Replit
+ * ✅ Works on any remote server
+ * ✅ No hardcoded URLs needed
  */
 
 class APIClient {
-    constructor(baseUrl = '/api') {
-        this.baseUrl = baseUrl;
+  constructor(baseUrl = '/api') {
+    this.baseUrl = baseUrl;
+    this.token = localStorage.getItem('authToken');
+    this.csrfToken = this.getCSRFToken();
+  }
+
+  /**
+   * Extract CSRF token from meta tag or cookie
+   */
+  getCSRFToken() {
+    // Try meta tag first
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+      return metaTag.getAttribute('content');
     }
 
-    getHeaders() {
-        const token = localStorage.getItem('authToken');
-
-        return {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-        };
+    // Try cookie as fallback
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN') {
+        return decodeURIComponent(value);
+      }
     }
 
-    async request(method, endpoint, data = null) {
-        try {
-            const options = {
-                method,
-                headers: this.getHeaders()
-            };
+    return null;
+  }
 
-            if (data && (method === 'POST' || method === 'PUT')) {
-                options.body = JSON.stringify(data);
-            }
+  /**
+   * Build request headers with authentication and CSRF protection
+   */
+  getHeaders(customHeaders = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...customHeaders,
+    };
 
-            const response = await fetch(`${this.baseUrl}${endpoint}`, options);
-
-            // 🔐 Unauthorized handling
-            if (response.status === 401) {
-                localStorage.removeItem('authToken');
-                window.location.href = '/';
-                return null;
-            }
-
-            // ❌ Handle errors
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API Error:', response.status, errorText);
-                return null;
-            }
-
-            return await response.json();
-
-        } catch (error) {
-            console.error('Network Error:', error);
-            return null;
-        }
+    // Add authorization token if available
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    // ================= AUTH =================
-    login(email, password) {
-        return this.request('POST', '/auth/login', { email, password });
+    // Add CSRF token if available
+    if (this.csrfToken) {
+      headers['X-CSRF-Token'] = this.csrfToken;
     }
 
-    getCurrentUser() {
-        return this.request('GET', '/auth/me');
+    return headers;
+  }
+
+  /**
+   * Generic request method with error handling
+   */
+  async request(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const config = {
+      ...options,
+      headers: this.getHeaders(options.headers || {}),
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        this.handleUnauthorized();
+        throw new Error('Unauthorized - please log in again');
+      }
+
+      // Handle forbidden errors
+      if (response.status === 403) {
+        throw new Error('Access denied - insufficient permissions');
+      }
+
+      // Handle server errors
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
+
+      // Parse and return response
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle unauthorized access (redirect to login)
+   */
+  handleUnauthorized() {
+    localStorage.removeItem('authToken');
+    this.token = null;
+    window.location.href = '/login';
+  }
+
+  /**
+   * Set authentication token
+   */
+  setToken(token) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
+    }
+  }
+
+  /**
+   * Clear authentication
+   */
+  clearAuth() {
+    this.setToken(null);
+  }
+
+  // ============= AUTH ENDPOINTS =============
+
+  /**
+   * Login user
+   */
+  async login(email, password) {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  /**
+   * Register new user
+   */
+  async register(userData) {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  /**
+   * Logout user
+   */
+  async logout() {
+    try {
+      await this.request('/auth/logout', { method: 'POST' });
+    } finally {
+      this.clearAuth();
+    }
+  }
+
+  /**
+   * Get current user info
+   */
+  async getCurrentUser() {
+    return this.request('/auth/me');
+  }
+
+  /**
+   * Refresh authentication token
+   */
+  async refreshToken() {
+    const response = await this.request('/auth/refresh', { method: 'POST' });
+    if (response.token) {
+      this.setToken(response.token);
+    }
+    return response;
+  }
+
+  // ============= PATIENT ENDPOINTS =============
+
+  /**
+   * Get all patients
+   */
+  async getPatients(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/patients?${queryString}` : '/patients';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get patient by ID
+   */
+  async getPatient(id) {
+    return this.request(`/patients/${id}`);
+  }
+
+  /**
+   * Create new patient
+   */
+  async createPatient(patientData) {
+    return this.request('/patients', {
+      method: 'POST',
+      body: JSON.stringify(patientData),
+    });
+  }
+
+  /**
+   * Update patient
+   */
+  async updatePatient(id, patientData) {
+    return this.request(`/patients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patientData),
+    });
+  }
+
+  /**
+   * Delete patient
+   */
+  async deletePatient(id) {
+    return this.request(`/patients/${id}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Get patient medical history
+   */
+  async getPatientHistory(id) {
+    return this.request(`/patients/${id}/history`);
+  }
+
+  /**
+   * Add medical record to patient
+   */
+  async addMedicalRecord(patientId, recordData) {
+    return this.request(`/patients/${patientId}/records`, {
+      method: 'POST',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  // ============= APPOINTMENT ENDPOINTS =============
+
+  /**
+   * Get all appointments
+   */
+  async getAppointments(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/appointments?${queryString}` : '/appointments';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get appointment by ID
+   */
+  async getAppointment(id) {
+    return this.request(`/appointments/${id}`);
+  }
+
+  /**
+   * Create new appointment
+   */
+  async createAppointment(appointmentData) {
+    return this.request('/appointments', {
+      method: 'POST',
+      body: JSON.stringify(appointmentData),
+    });
+  }
+
+  /**
+   * Update appointment
+   */
+  async updateAppointment(id, appointmentData) {
+    return this.request(`/appointments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(appointmentData),
+    });
+  }
+
+  /**
+   * Cancel appointment
+   */
+  async cancelAppointment(id) {
+    return this.request(`/appointments/${id}`, { method: 'DELETE' });
+  }
+
+  // ============= STAFF ENDPOINTS =============
+
+  /**
+   * Get all staff members
+   */
+  async getStaff(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/staff?${queryString}` : '/staff';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get staff member by ID
+   */
+  async getStaffMember(id) {
+    return this.request(`/staff/${id}`);
+  }
+
+  /**
+   * Create new staff member
+   */
+  async createStaffMember(staffData) {
+    return this.request('/staff', {
+      method: 'POST',
+      body: JSON.stringify(staffData),
+    });
+  }
+
+  /**
+   * Update staff member
+   */
+  async updateStaffMember(id, staffData) {
+    return this.request(`/staff/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(staffData),
+    });
+  }
+
+  /**
+   * Delete staff member
+   */
+  async deleteStaffMember(id) {
+    return this.request(`/staff/${id}`, { method: 'DELETE' });
+  }
+
+  // ============= BILLING ENDPOINTS =============
+
+  /**
+   * Get all invoices
+   */
+  async getInvoices(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/invoices?${queryString}` : '/invoices';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get invoice by ID
+   */
+  async getInvoice(id) {
+    return this.request(`/invoices/${id}`);
+  }
+
+  /**
+   * Create new invoice
+   */
+  async createInvoice(invoiceData) {
+    return this.request('/invoices', {
+      method: 'POST',
+      body: JSON.stringify(invoiceData),
+    });
+  }
+
+  /**
+   * Update invoice
+   */
+  async updateInvoice(id, invoiceData) {
+    return this.request(`/invoices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(invoiceData),
+    });
+  }
+
+  /**
+   * Get payment status
+   */
+  async getPaymentStatus(invoiceId) {
+    return this.request(`/invoices/${invoiceId}/payment-status`);
+  }
+
+  // ============= REPORTS ENDPOINTS =============
+
+  /**
+   * Generate report
+   */
+  async generateReport(reportType, filters = {}) {
+    return this.request('/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify({ reportType, filters }),
+    });
+  }
+
+  /**
+   * Get report by ID
+   */
+  async getReport(id) {
+    return this.request(`/reports/${id}`);
+  }
+
+  /**
+   * Export report
+   */
+  async exportReport(id, format = 'pdf') {
+    return this.request(`/reports/${id}/export?format=${format}`);
+  }
+
+  // ============= FILE UPLOAD ENDPOINTS =============
+
+  /**
+   * Upload file (for documents, images, etc.)
+   */
+  async uploadFile(file, metadata = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    Object.keys(metadata).forEach((key) => {
+      formData.append(key, metadata[key]);
+    });
+
+    const headers = this.getHeaders();
+    delete headers['Content-Type']; // Let browser set it for FormData
+
+    try {
+      const response = await fetch(`${this.baseUrl}/files/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('File upload error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Download file
+   */
+  async downloadFile(fileId) {
+    const response = await fetch(`${this.baseUrl}/files/${fileId}`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
     }
 
-    logout() {
-        return this.request('POST', '/auth/logout');
-    }
+    return response.blob();
+  }
 
-    // ================= PATIENTS =================
-    getPatients(page = 1, limit = 10) {
-        return this.request('GET', `/patients?page=${page}&limit=${limit}`);
-    }
+  // ============= HEALTH CHECK =============
 
-    getPatient(id) {
-        return this.request('GET', `/patients/${id}`);
+  /**
+   * Check API health status
+   */
+  async healthCheck() {
+    try {
+      const response = await fetch(`${this.baseUrl}/health`, {
+        method: 'GET',
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
-
-    createPatient(data) {
-        return this.request('POST', '/patients', data);
-    }
-
-    updatePatient(id, data) {
-        return this.request('PUT', `/patients/${id}`, data);
-    }
-
-    deletePatient(id) {
-        return this.request('DELETE', `/patients/${id}`);
-    }
-
-    searchPatients(query) {
-        return this.request('GET', `/patients/search?q=${encodeURIComponent(query)}`);
-    }
-
-    // ================= DOCTORS =================
-    getDoctors(page = 1, limit = 10) {
-        return this.request('GET', `/doctors?page=${page}&limit=${limit}`);
-    }
-
-    getDoctor(id) {
-        return this.request('GET', `/doctors/${id}`);
-    }
-
-    createDoctor(data) {
-        return this.request('POST', '/doctors', data);
-    }
-
-    updateDoctor(id, data) {
-        return this.request('PUT', `/doctors/${id}`, data);
-    }
-
-    // ================= APPOINTMENTS =================
-    getAppointments(page = 1, limit = 10, status = null) {
-        let url = `/appointments?page=${page}&limit=${limit}`;
-        if (status) url += `&status=${status}`;
-        return this.request('GET', url);
-    }
-
-    createAppointment(data) {
-        return this.request('POST', '/appointments', data);
-    }
-
-    updateAppointment(id, data) {
-        return this.request('PUT', `/appointments/${id}`, data);
-    }
-
-    cancelAppointment(id) {
-        return this.request('DELETE', `/appointments/${id}`);
-    }
-
-    // ================= RECORDS =================
-    getRecords(page = 1, limit = 10) {
-        return this.request('GET', `/records?page=${page}&limit=${limit}`);
-    }
-
-    createRecord(data) {
-        return this.request('POST', '/records', data);
-    }
-
-    // ================= BILLING =================
-    getInvoices(page = 1, limit = 10) {
-        return this.request('GET', `/billing?page=${page}&limit=${limit}`);
-    }
-
-    createInvoice(data) {
-        return this.request('POST', '/billing', data);
-    }
-
-    updateInvoiceStatus(id, status) {
-        return this.request('PUT', `/billing/${id}`, { status });
-    }
-
-    // ================= DASHBOARD =================
-    getDashboardStats() {
-        return this.request('GET', '/dashboard/stats');
-    }
+  }
 }
 
-// 🌐 Global instance
-window.api = new APIClient();
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = APIClient;
+}
+
+// Create global instance for browser use
+if (typeof window !== 'undefined') {
+  window.apiClient = new APIClient();
+}
+
