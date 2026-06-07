@@ -1,13 +1,12 @@
-**
+/**
  * Hospital Management System - Main Application File
  * Handles page routing, navigation, and overall app state
- * 
+ *
  * PRODUCTION-READY: Uses relative URL (/api) for universal compatibility
- * ✅ Works on localhost
- * ✅ Works on Replit
- * ✅ Works on any remote server
+ * Works on localhost
+ * Works on Replit
+ * Works on any remote server
  */
-
 class HospitalApp {
   constructor() {
     this.currentPage = 'login';
