@@ -272,4 +272,5 @@ class PatientsPage {
 // Initialize patients page
 document.addEventListener('DOMContentLoaded', () => {
     window.patientsPage = new PatientsPage();
-});
+});                                                                                                                                                
+
