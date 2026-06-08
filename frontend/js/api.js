@@ -9,7 +9,7 @@
  */
 
 class APIClient {
-  constructor(baseUrl = '/api') {
+  constructor(baseUrl = 'https://msmscoompletefinal--ms1464684.replit.app/api') {
     this.baseUrl = baseUrl;
     this.token = localStorage.getItem('authToken');
     this.csrfToken = this.getCSRFToken();
@@ -183,6 +183,22 @@ class APIClient {
     return response;
   }
 
+  // ============= DASHBOARD ENDPOINTS =============
+
+  /**
+   * Get dashboard statistics
+   */
+  async getDashboardStats() {
+    return this.request('/dashboard/stats');
+  }
+
+  /**
+   * Get dashboard activity
+   */
+  async getDashboardActivity(limit = 10) {
+    return this.request(`/dashboard/activity?limit=${limit}`);
+  }
+
   // ============= PATIENT ENDPOINTS =============
 
   /**
@@ -290,10 +306,10 @@ class APIClient {
     return this.request(`/appointments/${id}`, { method: 'DELETE' });
   }
 
-  // ============= STAFF ENDPOINTS =============
+  // ============= STAFF/DOCTORS ENDPOINTS =============
 
   /**
-   * Get all staff members
+   * Get all staff members (alias: getDoctors)
    */
   async getStaff(filters = {}) {
     const queryString = new URLSearchParams(filters).toString();
@@ -335,49 +351,101 @@ class APIClient {
     return this.request(`/staff/${id}`, { method: 'DELETE' });
   }
 
-  // ============= BILLING ENDPOINTS =============
+  /**
+   * Alias for getStaff (doctors are staff members)
+   */
+  async getDoctors(filters = {}) {
+    return this.getStaff(filters);
+  }
+
+  // ============= MEDICAL RECORDS ENDPOINTS =============
 
   /**
-   * Get all invoices
+   * Get all medical records
    */
-  async getInvoices(filters = {}) {
+  async getRecords(filters = {}) {
     const queryString = new URLSearchParams(filters).toString();
-    const endpoint = queryString ? `/invoices?${queryString}` : '/invoices';
+    const endpoint = queryString ? `/records?${queryString}` : '/records';
     return this.request(endpoint);
   }
 
   /**
-   * Get invoice by ID
+   * Get medical record by ID
    */
-  async getInvoice(id) {
-    return this.request(`/invoices/${id}`);
+  async getRecord(id) {
+    return this.request(`/records/${id}`);
   }
 
   /**
-   * Create new invoice
+   * Create new medical record
+   */
+  async createRecord(recordData) {
+    return this.request('/records', {
+      method: 'POST',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  /**
+   * Update medical record
+   */
+  async updateRecord(id, recordData) {
+    return this.request(`/records/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  /**
+   * Delete medical record
+   */
+  async deleteRecord(id) {
+    return this.request(`/records/${id}`, { method: 'DELETE' });
+  }
+
+  // ============= BILLING ENDPOINTS =============
+
+  /**
+   * Get all invoices (backend endpoint: /billing)
+   */
+  async getInvoices(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/billing?${queryString}` : '/billing';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get invoice by ID (backend endpoint: /billing)
+   */
+  async getInvoice(id) {
+    return this.request(`/billing/${id}`);
+  }
+
+  /**
+   * Create new invoice (backend endpoint: /billing)
    */
   async createInvoice(invoiceData) {
-    return this.request('/invoices', {
+    return this.request('/billing', {
       method: 'POST',
       body: JSON.stringify(invoiceData),
     });
   }
 
   /**
-   * Update invoice
+   * Update invoice (backend endpoint: /billing)
    */
   async updateInvoice(id, invoiceData) {
-    return this.request(`/invoices/${id}`, {
+    return this.request(`/billing/${id}`, {
       method: 'PUT',
       body: JSON.stringify(invoiceData),
     });
   }
 
   /**
-   * Get payment status
+   * Get payment status (backend endpoint: /billing)
    */
   async getPaymentStatus(invoiceId) {
-    return this.request(`/invoices/${invoiceId}/payment-status`);
+    return this.request(`/billing/${invoiceId}/payment-status`);
   }
 
   // ============= REPORTS ENDPOINTS =============
