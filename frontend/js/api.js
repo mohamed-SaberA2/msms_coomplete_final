@@ -547,4 +547,5 @@ if (typeof module !== 'undefined' && module.exports) {
 // Create global instance for browser use
 if (typeof window !== 'undefined') {
   window.apiClient = new APIClient();
+  window.api = window.apiClient; // Alias for compatibility
 }
