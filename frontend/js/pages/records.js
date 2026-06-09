@@ -19,6 +19,11 @@ class RecordsPage {
         });
     }
     
+    setupEventListeners() {
+        // Setup event listeners for records page
+        // Add button listeners, filters, etc. here
+    }
+    
     async loadRecords() {
         try {
             const result = await window.api.getRecords(1, 10);

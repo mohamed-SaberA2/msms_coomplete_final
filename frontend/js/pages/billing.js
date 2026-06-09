@@ -19,6 +19,11 @@ class BillingPage {
         });
     }
     
+    setupEventListeners() {
+        // Setup event listeners for billing page
+        // Add button listeners, filters, etc. here
+    }
+    
     async loadInvoices() {
         try {
             const result = await window.api.getInvoices(1, 10);

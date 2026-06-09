@@ -19,6 +19,11 @@ class AppointmentsPage {
         });
     }
     
+    setupEventListeners() {
+        // Setup event listeners for appointments page
+        // Add button listeners, filters, etc. here
+    }
+    
     async loadAppointments() {
         try {
             const result = await window.api.getAppointments(1, 10);

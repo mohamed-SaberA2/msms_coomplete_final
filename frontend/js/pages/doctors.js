@@ -19,6 +19,11 @@ class DoctorsPage {
         });
     }
     
+    setupEventListeners() {
+        // Setup event listeners for doctors page
+        // Add button listeners, filters, etc. here
+    }
+    
     async loadDoctors() {
         try {
             const result = await window.api.getDoctors(1, 10);
