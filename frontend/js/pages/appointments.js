@@ -8,6 +8,10 @@ class AppointmentsPage {
     }
     
     init() {
+        this.loadAppointments();
+        this.setupEventListeners();
+        
+        // Also listen for page load events for re-loading data
         document.addEventListener('pageLoad', (e) => {
             if (e.detail.page === 'appointments') {
                 this.loadAppointments();

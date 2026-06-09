@@ -11,10 +11,13 @@ class PatientsPage {
     }
     
     init() {
+        this.loadPatients();
+        this.setupEventListeners();
+        
+        // Also listen for page load events for re-loading data
         document.addEventListener('pageLoad', (e) => {
             if (e.detail.page === 'patients') {
                 this.loadPatients();
-                this.setupEventListeners();
             }
         });
     }

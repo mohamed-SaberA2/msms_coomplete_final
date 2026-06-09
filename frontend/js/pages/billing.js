@@ -8,6 +8,10 @@ class BillingPage {
     }
     
     init() {
+        this.loadInvoices();
+        this.setupEventListeners();
+        
+        // Also listen for page load events for re-loading data
         document.addEventListener('pageLoad', (e) => {
             if (e.detail.page === 'billing') {
                 this.loadInvoices();

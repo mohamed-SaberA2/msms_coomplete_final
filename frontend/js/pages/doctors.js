@@ -8,6 +8,10 @@ class DoctorsPage {
     }
     
     init() {
+        this.loadDoctors();
+        this.setupEventListeners();
+        
+        // Also listen for page load events for re-loading data
         document.addEventListener('pageLoad', (e) => {
             if (e.detail.page === 'doctors') {
                 this.loadDoctors();
