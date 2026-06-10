@@ -199,6 +199,13 @@ class APIClient {
     return this.request(`/dashboard/activity?limit=${limit}`);
   }
 
+  /**
+   * Alias for getDashboardActivity (backward compatibility)
+   */
+  async getRecentActivity(limit = 10) {
+    return this.getDashboardActivity(limit);
+  }
+
   // ============= PATIENT ENDPOINTS =============
 
   /**
