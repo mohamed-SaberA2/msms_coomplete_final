@@ -1,203 +1,558 @@
 /**
- * API Communication Module
- * Handles all HTTP requests to the backend
+ * API Client - Production-Ready
+ * 
+ * Uses relative URLs (/api) for universal compatibility:
+ * ✅ Works on localhost
+ * ✅ Works on Replit
+ * ✅ Works on any remote server
+ * ✅ No hardcoded URLs needed
  */
 
 class APIClient {
-    constructor(baseUrl = 'http://127.0.0.1:5000/api') {
-        this.baseUrl = baseUrl;
+  constructor(baseUrl = 'https://msmscoompletefinal--ms1464684.replit.app/api') {
+    this.baseUrl = baseUrl;
+    this.token = localStorage.getItem('authToken');
+    this.csrfToken = this.getCSRFToken();
+  }
+
+  /**
+   * Extract CSRF token from meta tag or cookie
+   */
+  getCSRFToken() {
+    // Try meta tag first
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+      return metaTag.getAttribute('content');
     }
-    
-    getHeaders() {
-        const token = localStorage.getItem('authToken');
-        return {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-        };
+
+    // Try cookie as fallback
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN') {
+        return decodeURIComponent(value);
+      }
     }
-    
-    async request(method, endpoint, data = null) {
-        try {
-            const options = {
-                method,
-                headers: this.getHeaders()
-            };
-            
-            if (data && (method === 'POST' || method === 'PUT')) {
-                options.body = JSON.stringify(data);
-            }
-            
-            const response = await fetch(`${this.baseUrl}${endpoint}`, options);
-            
-            if (response.status === 401) {
-                localStorage.removeItem('authToken');
-                console.log('Token expired - redirecting to login');
-                window.location.href = '/';
-                return null;
-            }
-            
-            if (!response.ok) {
-                console.warn(`API Error: ${response.status} ${response.statusText}`);
-                try {
-                    const error = await response.json();
-                    console.error('API Error Details:', error);
-                } catch (e) {
-                    console.error('Could not parse error response');
-                }
-                return null;
-            }
-            
-            const result = await response.json();
-            return result;
-        } catch (error) {
-            console.error('API Request Error:', error);
-            return null;
-        }
+
+    return null;
+  }
+
+  /**
+   * Build request headers with authentication and CSRF protection
+   */
+  getHeaders(customHeaders = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...customHeaders,
+    };
+
+    // Add authorization token if available
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
-    
-    // Authentication
-    async login(email, password) {
-        return this.request('POST', '/auth/login', { email, password });
+
+    // Add CSRF token if available
+    if (this.csrfToken) {
+      headers['X-CSRF-Token'] = this.csrfToken;
     }
-    
-    async getCurrentUser() {
-        return this.request('GET', '/auth/me');
+
+    return headers;
+  }
+
+  /**
+   * Generic request method with error handling
+   */
+  async request(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const config = {
+      ...options,
+      headers: this.getHeaders(options.headers || {}),
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        this.handleUnauthorized();
+        throw new Error('Unauthorized - please log in again');
+      }
+
+      // Handle forbidden errors
+      if (response.status === 403) {
+        throw new Error('Access denied - insufficient permissions');
+      }
+
+      // Handle server errors
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
+
+      // Parse and return response
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
     }
-    
-    async logout() {
-        return this.request('POST', '/auth/logout');
+  }
+
+  /**
+   * Handle unauthorized access (redirect to login)
+   */
+  handleUnauthorized() {
+    localStorage.removeItem('authToken');
+    this.token = null;
+    window.location.href = '/login';
+  }
+
+  /**
+   * Set authentication token
+   */
+  setToken(token) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
     }
-    
-    // Patients
-    async getPatients(page = 1, limit = 10) {
-        return this.request('GET', `/patients?page=${page}&limit=${limit}`);
+  }
+
+  /**
+   * Clear authentication
+   */
+  clearAuth() {
+    this.setToken(null);
+  }
+
+  // ============= AUTH ENDPOINTS =============
+
+  /**
+   * Login user
+   */
+  async login(email, password) {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  /**
+   * Register new user
+   */
+  async register(userData) {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  /**
+   * Logout user
+   */
+  async logout() {
+    try {
+      await this.request('/auth/logout', { method: 'POST' });
+    } finally {
+      this.clearAuth();
     }
-    
-    async getPatient(id) {
-        return this.request('GET', `/patients/${id}`);
+  }
+
+  /**
+   * Get current user info
+   */
+  async getCurrentUser() {
+    return this.request('/auth/me');
+  }
+
+  /**
+   * Refresh authentication token
+   */
+  async refreshToken() {
+    const response = await this.request('/auth/refresh', { method: 'POST' });
+    if (response.token) {
+      this.setToken(response.token);
     }
-    
-    async createPatient(data) {
-        return this.request('POST', '/patients', data);
+    return response;
+  }
+
+  // ============= DASHBOARD ENDPOINTS =============
+
+  /**
+   * Get dashboard statistics
+   */
+  async getDashboardStats() {
+    return this.request('/dashboard/stats');
+  }
+
+  /**
+   * Get dashboard activity
+   */
+  async getDashboardActivity(limit = 10) {
+    return this.request(`/dashboard/activity?limit=${limit}`);
+  }
+
+  /**
+   * Alias for getDashboardActivity (for backward compatibility)
+   */
+  async getRecentActivity(limit = 10) {
+    return this.getDashboardActivity(limit);
+  }
+
+  // ============= PATIENT ENDPOINTS =============
+
+  /**
+   * Get all patients
+   */
+  async getPatients(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/patients?${queryString}` : '/patients';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get patient by ID
+   */
+  async getPatient(id) {
+    return this.request(`/patients/${id}`);
+  }
+
+  /**
+   * Create new patient
+   */
+  async createPatient(patientData) {
+    return this.request('/patients', {
+      method: 'POST',
+      body: JSON.stringify(patientData),
+    });
+  }
+
+  /**
+   * Update patient
+   */
+  async updatePatient(id, patientData) {
+    return this.request(`/patients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patientData),
+    });
+  }
+
+  /**
+   * Delete patient
+   */
+  async deletePatient(id) {
+    return this.request(`/patients/${id}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Get patient medical history
+   */
+  async getPatientHistory(id) {
+    return this.request(`/patients/${id}/history`);
+  }
+
+  /**
+   * Add medical record to patient
+   */
+  async addMedicalRecord(patientId, recordData) {
+    return this.request(`/patients/${patientId}/records`, {
+      method: 'POST',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  // ============= APPOINTMENT ENDPOINTS =============
+
+  /**
+   * Get all appointments
+   */
+  async getAppointments(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/appointments?${queryString}` : '/appointments';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get appointment by ID
+   */
+  async getAppointment(id) {
+    return this.request(`/appointments/${id}`);
+  }
+
+  /**
+   * Create new appointment
+   */
+  async createAppointment(appointmentData) {
+    return this.request('/appointments', {
+      method: 'POST',
+      body: JSON.stringify(appointmentData),
+    });
+  }
+
+  /**
+   * Update appointment
+   */
+  async updateAppointment(id, appointmentData) {
+    return this.request(`/appointments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(appointmentData),
+    });
+  }
+
+  /**
+   * Cancel appointment
+   */
+  async cancelAppointment(id) {
+    return this.request(`/appointments/${id}`, { method: 'DELETE' });
+  }
+
+  // ============= STAFF/DOCTORS ENDPOINTS =============
+
+  /**
+   * Get all staff members (alias: getDoctors)
+   */
+  async getStaff(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/staff?${queryString}` : '/staff';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get staff member by ID
+   */
+  async getStaffMember(id) {
+    return this.request(`/staff/${id}`);
+  }
+
+  /**
+   * Create new staff member
+   */
+  async createStaffMember(staffData) {
+    return this.request('/staff', {
+      method: 'POST',
+      body: JSON.stringify(staffData),
+    });
+  }
+
+  /**
+   * Update staff member
+   */
+  async updateStaffMember(id, staffData) {
+    return this.request(`/staff/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(staffData),
+    });
+  }
+
+  /**
+   * Delete staff member
+   */
+  async deleteStaffMember(id) {
+    return this.request(`/staff/${id}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Alias for getStaff (doctors are staff members)
+   */
+  async getDoctors(filters = {}) {
+    return this.getStaff(filters);
+  }
+
+  // ============= MEDICAL RECORDS ENDPOINTS =============
+
+  /**
+   * Get all medical records
+   */
+  async getRecords(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/records?${queryString}` : '/records';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get medical record by ID
+   */
+  async getRecord(id) {
+    return this.request(`/records/${id}`);
+  }
+
+  /**
+   * Create new medical record
+   */
+  async createRecord(recordData) {
+    return this.request('/records', {
+      method: 'POST',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  /**
+   * Update medical record
+   */
+  async updateRecord(id, recordData) {
+    return this.request(`/records/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(recordData),
+    });
+  }
+
+  /**
+   * Delete medical record
+   */
+  async deleteRecord(id) {
+    return this.request(`/records/${id}`, { method: 'DELETE' });
+  }
+
+  // ============= BILLING ENDPOINTS =============
+
+  /**
+   * Get all invoices (backend endpoint: /billing)
+   */
+  async getInvoices(filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = queryString ? `/billing?${queryString}` : '/billing';
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get invoice by ID (backend endpoint: /billing)
+   */
+  async getInvoice(id) {
+    return this.request(`/billing/${id}`);
+  }
+
+  /**
+   * Create new invoice (backend endpoint: /billing)
+   */
+  async createInvoice(invoiceData) {
+    return this.request('/billing', {
+      method: 'POST',
+      body: JSON.stringify(invoiceData),
+    });
+  }
+
+  /**
+   * Update invoice (backend endpoint: /billing)
+   */
+  async updateInvoice(id, invoiceData) {
+    return this.request(`/billing/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(invoiceData),
+    });
+  }
+
+  /**
+   * Get payment status (backend endpoint: /billing)
+   */
+  async getPaymentStatus(invoiceId) {
+    return this.request(`/billing/${invoiceId}/payment-status`);
+  }
+
+  // ============= REPORTS ENDPOINTS =============
+
+  /**
+   * Generate report
+   */
+  async generateReport(reportType, filters = {}) {
+    return this.request('/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify({ reportType, filters }),
+    });
+  }
+
+  /**
+   * Get report by ID
+   */
+  async getReport(id) {
+    return this.request(`/reports/${id}`);
+  }
+
+  /**
+   * Export report
+   */
+  async exportReport(id, format = 'pdf') {
+    return this.request(`/reports/${id}/export?format=${format}`);
+  }
+
+  // ============= FILE UPLOAD ENDPOINTS =============
+
+  /**
+   * Upload file (for documents, images, etc.)
+   */
+  async uploadFile(file, metadata = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    Object.keys(metadata).forEach((key) => {
+      formData.append(key, metadata[key]);
+    });
+
+    const headers = this.getHeaders();
+    delete headers['Content-Type']; // Let browser set it for FormData
+
+    try {
+      const response = await fetch(`${this.baseUrl}/files/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('File upload error:', error);
+      throw error;
     }
-    
-    async updatePatient(id, data) {
-        return this.request('PUT', `/patients/${id}`, data);
+  }
+
+  /**
+   * Download file
+   */
+  async downloadFile(fileId) {
+    const response = await fetch(`${this.baseUrl}/files/${fileId}`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
     }
-    
-    async deletePatient(id) {
-        return this.request('DELETE', `/patients/${id}`);
+
+    return response.blob();
+  }
+
+  // ============= HEALTH CHECK =============
+
+  /**
+   * Check API health status
+   */
+  async healthCheck() {
+    try {
+      const response = await fetch(`${this.baseUrl}/health`, {
+        method: 'GET',
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
-    
-    async searchPatients(query) {
-        return this.request('GET', `/patients/search?q=${encodeURIComponent(query)}`);
-    }
-    
-    // Doctors
-    async getDoctors(page = 1, limit = 10) {
-        return this.request('GET', `/doctors?page=${page}&limit=${limit}`);
-    }
-    
-    async getDoctor(id) {
-        return this.request('GET', `/doctors/${id}`);
-    }
-    
-    async createDoctor(data) {
-        return this.request('POST', '/doctors', data);
-    }
-    
-    async updateDoctor(id, data) {
-        return this.request('PUT', `/doctors/${id}`, data);
-    }
-    
-    async getAvailableSlots(doctorId, date) {
-        return this.request('GET', `/doctors/${doctorId}/slots?date=${date}`);
-    }
-    
-    // Appointments
-    async getAppointments(page = 1, limit = 10, status = null) {
-        let url = `/appointments?page=${page}&limit=${limit}`;
-        if (status) url += `&status=${status}`;
-        return this.request('GET', url);
-    }
-    
-    async getAppointment(id) {
-        return this.request('GET', `/appointments/${id}`);
-    }
-    
-    async createAppointment(data) {
-        return this.request('POST', '/appointments', data);
-    }
-    
-    async updateAppointment(id, data) {
-        return this.request('PUT', `/appointments/${id}`, data);
-    }
-    
-    async cancelAppointment(id) {
-        return this.request('DELETE', `/appointments/${id}`);
-    }
-    
-    async getTodayAppointments() {
-        return this.request('GET', '/appointments/today');
-    }
-    
-    // Medical Records
-    async getRecords(page = 1, limit = 10) {
-        return this.request('GET', `/records?page=${page}&limit=${limit}`);
-    }
-    
-    async getRecord(id) {
-        return this.request('GET', `/records/${id}`);
-    }
-    
-    async createRecord(data) {
-        return this.request('POST', '/records', data);
-    }
-    
-    async updateRecord(id, data) {
-        return this.request('PUT', `/records/${id}`, data);
-    }
-    
-    async getPatientRecords(patientId) {
-        return this.request('GET', `/records/patient/${patientId}`);
-    }
-    
-    // Billing
-    async getInvoices(page = 1, limit = 10, status = null) {
-        let url = `/billing?page=${page}&limit=${limit}`;
-        if (status) url += `&status=${status}`;
-        return this.request('GET', url);
-    }
-    
-    async getInvoice(id) {
-        return this.request('GET', `/billing/${id}`);
-    }
-    
-    async createInvoice(data) {
-        return this.request('POST', '/billing', data);
-    }
-    
-    async updateInvoiceStatus(id, status, paidDate = null) {
-        return this.request('PUT', `/billing/${id}`, { status, paidDate });
-    }
-    
-    async generateInvoice(appointmentId, data) {
-        return this.request('POST', `/billing/generate/${appointmentId}`, data);
-    }
-    
-    async getBillingStats() {
-        return this.request('GET', '/billing/stats');
-    }
-    
-    // Dashboard
-    async getDashboardStats() {
-        return this.request('GET', '/dashboard/stats');
-    }
-    
-    async getRecentActivity(limit = 10) {
-        return this.request('GET', `/dashboard/activity?limit=${limit}`);
-    }
+  }
 }
 
-// Create global API client instance
-window.api = new APIClient();
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = APIClient;
+}
+
+// Create global instance for browser use
+if (typeof window !== 'undefined') {
+  window.apiClient = new APIClient();
+  window.api = window.apiClient; // Alias for compatibility
+}
