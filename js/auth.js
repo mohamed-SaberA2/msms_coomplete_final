@@ -1,3 +1,9 @@
+/**
+ * Auth Manager - Simple authentication helper
+ * ✅ No redirects to /login
+ * ✅ Works with SPA pattern
+ */
+
 class AuthManager {
   constructor() {
     this.token = localStorage.getItem('authToken');
@@ -5,11 +11,15 @@ class AuthManager {
 
   setToken(token) {
     this.token = token;
-    localStorage.setItem('authToken', token);
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
+    }
   }
 
   getToken() {
-    return this.token;
+    return localStorage.getItem('authToken');
   }
 
   clearToken() {
@@ -18,16 +28,23 @@ class AuthManager {
   }
 
   isAuthenticated() {
-    return !!this.token;
+    return !!this.getToken();
   }
 
   logout() {
     this.clearToken();
-    if (window.app) {
+    
+    // ✅ CORRECT: Use app.showPage() instead of redirect
+    if (window.app && typeof window.app.showPage === 'function') {
       window.app.showPage('login');
     }
-    history.pushState({}, "", "/");
+    
+    // ✅ Keep URL clean
+    if (window.history && window.history.pushState) {
+      window.history.pushState({}, "", "/");
+    }
   }
 }
 
+// Create global instance
 window.authManager = new AuthManager();
